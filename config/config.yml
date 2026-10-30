@@ -1,0 +1,36 @@
+shellPath: C:\Program Files\Git\bin\bash.exe
+setupVersion: 2
+modelRoles:
+  default: anthropic/claude-opus-5:high
+  speech: local/kokoro
+  dictation: local/parakeet-tdt-0.6b-v3
+dev:
+  autoqaConsent: denied
+hideThinkingBlock: true
+display:
+  hideToolActivity: true
+  collapseCompacted: false
+statusLine:
+  preset: custom
+  leftSegments:
+    - vim
+    - model
+    - mode
+    - path
+    - git
+    - pr
+  rightSegments:
+    - session_name
+    - usage
+    - token_total
+    - context_pct
+stt:
+  enabled: true
+  language: uk
+compaction:
+  methodOrder:
+    - snapcompact
+    - handoff
+    - shake
+    - soft
+  keepRecentTokens: 40000
