@@ -2,12 +2,13 @@
 // HummingRelay has no balance endpoint on api.hmbrd.dev; its console accepts the same hr_live_ key:
 //   POST https://hmbrd.dev/api/dashboard/login {"key": "..."} -> `hr_console` session cookie (7 days)
 //   GET  https://hmbrd.dev/dashboard -> server-rendered overview with balance, paid/bonus split, 30-day spend.
-// The status-line `usage` segment only renders 5h/1d/7d windows (and monthly for an allowlist), so the
-// balance is also published through `ctx.ui.setStatus` while a hummingrelay model is active
-// (shown by the `status` segment, or the footer hook-status row).
+// The status-line `usage` segment only renders percent windows (5h/1d/7d, monthly for an allowlist), so the
+// balance is published through `ctx.ui.setStatus` while a hummingrelay model is active, styled like that
+// segment: `⏱ $2.60 · paid $0.11 · ≈3d`. It shows in the footer hook-status row, which keeps colors; the
+// `status` segment would strip them and paint everything in the accent color.
 
 import type { UsageLimit, UsageProvider } from "@oh-my-pi/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, theme } from "@oh-my-pi/pi-coding-agent";
 
 const PROVIDER = "hummingrelay";
 const ORIGIN = "https://hmbrd.dev";
@@ -16,6 +17,10 @@ const OVERVIEW_URL = `${ORIGIN}/dashboard`;
 const KEY_ENV = "HMBRD_API_KEY";
 const STATUS_KEY = "hummingrelay";
 const STATUS_TTL_MS = 60_000;
+// Credit below this colors the figure as a warning; at or below zero, as an error.
+const LOW_CREDIT_USD = 1;
+// The only model that bonus credit cannot pay for.
+const PAID_ONLY_MODEL = "model-one";
 
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -168,8 +173,28 @@ export default function hummingRelayUsage(pi: ExtensionAPI) {
 	pi.registerProvider(PROVIDER, { usage });
 
 	// Status line: balance of the active hummingrelay model, refreshed after each agent run and every minute.
-	let last: { at: number; text: string } | undefined;
+	let last: { at: number; data?: Balance } | undefined;
 	let inFlight: Promise<void> | undefined;
+
+	// Same tones as the `usage` segment: muted while fine, warning when low, error when spent.
+	const tone = (value: number) => (value <= 0 ? "error" : value < LOW_CREDIT_USD ? "warning" : "muted");
+	const shortRunway = (runway: string) => {
+		const match = runway.match(/≈\s*([\d.]+)\s*(hour|day|week|month)/);
+		if (!match) return runway.replace(/ at current pace$/, "");
+		const unit = { hour: "h", day: "d", week: "w", month: "mo" }[match[2] as "hour" | "day" | "week" | "month"];
+		return `≈${match[1]}${unit}`;
+	};
+	// Paid credit is what model-one spends; on the other models the total balance is what runs out.
+	const render = (data: Balance | undefined, modelId: string | undefined) => {
+		if (!data) return `${theme.icon.time} ${theme.fg("error", "HR balance unavailable")}`;
+		const paidOnly = modelId === PAID_ONLY_MODEL;
+		const parts = [
+			theme.fg(paidOnly ? "muted" : tone(data.balance), usd(data.balance)),
+			`paid ${theme.fg(paidOnly ? tone(data.paid) : "muted", usd(data.paid))}`,
+		];
+		if (data.runway) parts.push(theme.fg("muted", shortRunway(data.runway)));
+		return `${theme.icon.time} ${parts.join(theme.sep.dot)}`;
+	};
 
 	const refresh = (ctx: ExtensionContext, force: boolean) => {
 		if (!ctx.hasUI) return;
@@ -179,22 +204,24 @@ export default function hummingRelayUsage(pi: ExtensionAPI) {
 			last = undefined;
 			return;
 		}
-		if (!force && last && Date.now() - last.at < STATUS_TTL_MS) return;
+		if (!force && last && Date.now() - last.at < STATUS_TTL_MS) {
+			// Re-tone without refetching: a switch between model-one and the others changes the relevant credit.
+			ctx.ui.setStatus(STATUS_KEY, render(last.data, model.id));
+			return;
+		}
 		const apiKey = process.env[KEY_ENV];
 		if (!apiKey || inFlight) return;
 		inFlight = fetchBalance(fetch as FetchFn, apiKey)
 			.then((data) => {
-				const runway = data.runway ? ` · ${data.runway.replace(/ at current pace$/, "")}` : "";
-				const text = `HR ${usd(data.balance)} (paid ${usd(data.paid)})${runway}`;
-				last = { at: Date.now(), text };
-				ctx.ui.setStatus(STATUS_KEY, text);
+				last = { at: Date.now(), data };
 			})
 			.catch(() => {
-				last = { at: Date.now(), text: "HR balance unavailable" };
-				ctx.ui.setStatus(STATUS_KEY, last.text);
+				last = { at: Date.now() };
 			})
 			.finally(() => {
 				inFlight = undefined;
+				const current = ctx.models?.current?.() ?? ctx.model;
+				ctx.ui.setStatus(STATUS_KEY, render(last?.data, current?.id));
 			});
 	};
 

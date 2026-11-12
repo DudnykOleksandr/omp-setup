@@ -22,10 +22,8 @@ statusLine:
   rightSegments:
     - session_name
     - usage
-    - status
     - token_total
     - context_pct
-  showHookStatus: false
 stt:
   enabled: true
   language: uk

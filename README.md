@@ -8,11 +8,11 @@ Nothing here contains credentials. The Ollama skill reads `OLLAMA_API_KEY` / `OL
 
 | Path | Installs to | What it is |
 |---|---|---|
-| `config/config.yml` | `~/.omp/agent/config.yml` | full agent config: display, compaction/token budgets, model roles, status line (with the `status` segment for extension statuses), STT |
+| `config/config.yml` | `~/.omp/agent/config.yml` | full agent config: display, compaction/token budgets, model roles, status line, STT |
 | `models/models.yml` | `~/.omp/agent/models.yml` | custom providers: [HummingRelay](https://hmbrd.dev/docs) (`hummingrelay/model-zero`, `model-one-flash`, `model-one`) |
 | `extensions/model-transit.ts` | `~/.omp/agent/extensions/` | recompacts automatically when the active model can no longer read the last compaction payload |
 | `extensions/ollama-cloud-usage.ts` | `~/.omp/agent/extensions/` | Ollama Cloud balance/quota provider |
-| `extensions/hummingrelay-usage.ts` | `~/.omp/agent/extensions/` | HummingRelay prepaid balance for `/usage`, `omp usage` and the status line |
+| `extensions/hummingrelay-usage.ts` | `~/.omp/agent/extensions/` | HummingRelay prepaid balance for `/usage`, `omp usage` and the footer status row |
 | `skills/ollama-cloud-usage/SKILL.md` | `~/.omp/agent/skills/ollama-cloud-usage/` | skill: how to query Ollama Cloud quota without leaking the key |
 | `docs/compaction-and-model-switching.md` | — | why these settings exist, with measurements |
 
@@ -74,6 +74,7 @@ Setup after `./install.sh`:
 Where it shows:
 
 - `omp usage --provider hummingrelay` and `/usage`: credit balance (paid + bonus), paid credit (the only credit `model-one` can spend), 30-day spend, runway.
-- Status line, while a `hummingrelay/*` model is active: `HR $2.50 (paid $0.00) · ≈ 3 days`. The built-in `usage` segment only renders 5h/1d/7d windows, so the extension publishes this through `ctx.ui.setStatus`, drawn by the `status` segment; `showHookStatus: false` keeps it from repeating in the footer. Refreshed after every agent run and at most once a minute; after a `/model` switch it appears or clears within ~15 s.
+- Footer status row under the editor, while a `hummingrelay/*` model is active: `⏱ $2.60 · paid $0.11 · ≈3d`, styled like the `usage` segment. The credit the active model spends is colored: paid credit on `model-one` (bonus cannot pay for it), the total balance on the others; muted while ≥ $1, warning below $1, error at $0 or less. Refreshed after every agent run and at most once a minute; after a `/model` switch it appears, clears or re-colors within ~15 s.
+- Why the footer row and not the status line: the built-in `usage` segment only renders percent windows (5h/1d/7d), and the `status` segment strips ANSI from extension statuses and paints them all in the accent color. The footer row (`statusLine.showHookStatus`, default `true`) keeps the colors.
 
-If the console layout changes, the status line shows `HR balance unavailable` and omp logs `HummingRelay balance request failed`; the parser is `parseOverview` in the extension.
+If the console layout changes, the footer shows `⏱ HR balance unavailable` in the error color and omp logs `HummingRelay balance request failed`; the parser is `parseOverview` in the extension.
