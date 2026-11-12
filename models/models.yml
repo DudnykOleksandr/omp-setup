@@ -1,0 +1,59 @@
+# HummingRelay — https://hmbrd.dev/ (OpenAI-compatible, Chat Completions only)
+# Key resolution: HMBRD_API_KEY env var (export in shell or put in ~/.omp/agent/.env),
+# or replace the line below with the literal hr_live_... key.
+providers:
+   hummingrelay:
+      baseUrl: https://api.hmbrd.dev/v1
+      api: openai-completions
+      apiKey: HMBRD_API_KEY
+      compat:
+         supportsDeveloperRole: false
+         supportsStore: false
+         supportsReasoningEffort: true
+         maxTokensField: max_tokens
+      models:
+         # Fast reasoning for agent loops and high volume; the only model that accepts reasoning off.
+         - id: model-zero
+           name: Model Zero
+           reasoning: true
+           input: [text]
+           contextWindow: 1048576
+           maxTokens: 32768
+           thinking:
+              mode: effort
+              efforts: [minimal, low, medium, high, xhigh, max]
+           cost:
+              input: 0.50
+              output: 1.00
+              cacheRead: 0.10
+              cacheWrite: 0.50
+         # Efficient general-purpose inference.
+         - id: model-one-flash
+           name: Model One Flash
+           reasoning: true
+           input: [text]
+           contextWindow: 1048576
+           maxTokens: 32768
+           thinking:
+              mode: effort
+              efforts: [minimal, low, medium, high, xhigh, max]
+           cost:
+              input: 0.40
+              output: 1.00
+              cacheRead: 0.10
+              cacheWrite: 0.40
+         # Advanced reasoning; paid credits only (bonus credits do not cover it).
+         - id: model-one
+           name: Model One
+           reasoning: true
+           input: [text]
+           contextWindow: 1048576
+           maxTokens: 32768
+           thinking:
+              mode: effort
+              efforts: [minimal, low, medium, high, xhigh, max]
+           cost:
+              input: 1.50
+              output: 3.00
+              cacheRead: 0.30
+              cacheWrite: 1.50
