@@ -31,16 +31,47 @@ export function appliesTo(model: { provider?: string; id?: string } | undefined)
 	return provider !== "anthropic" && !/(^|[/._-])(?:anthropic|claude|fable|mythos)(?=$|[/._-])/.test(id);
 }
 
-export function addBehavior(systemPrompt: string[], model: { provider?: string; id?: string } | undefined): string[] {
-	if (!appliesTo(model) || systemPrompt.some(block => block.includes(MARKER))) return systemPrompt;
-	return [...systemPrompt, CUES];
+function modelKey(model: { provider?: string; id?: string } | undefined): string | undefined {
+	return model?.provider && model.id ? `${model.provider.toLowerCase()}/${model.id.toLowerCase()}` : undefined;
+}
+
+export function addBehavior(
+	systemPrompt: string[],
+	model: { provider?: string; id?: string } | undefined,
+	enabled = true,
+): string[] {
+	const index = systemPrompt.indexOf(CUES);
+	if (!enabled || !appliesTo(model)) {
+		return index < 0 ? systemPrompt : systemPrompt.filter(block => block !== CUES);
+	}
+	return index < 0 ? [...systemPrompt, CUES] : systemPrompt;
 }
 
 export default function portableBehavior(pi: ExtensionAPI): void {
+	const overrides = new Map<string, boolean>();
 	pi.setLabel("Portable behavior cues");
+	pi.registerCommand("portable-behavior", {
+		description: "Toggle portable behavior for the active model: on | off | status",
+		handler: (args, ctx) => {
+			const key = modelKey(ctx.model);
+			if (!key) return ctx.ui.notify("No active model; select one with /model.", "warning");
+			const action = args.trim().toLowerCase() || "status";
+			if (!["on", "off", "status"].includes(action)) {
+				return ctx.ui.notify("Usage: /portable-behavior on | off | status", "warning");
+			}
+			if (!appliesTo(ctx.model)) {
+				return ctx.ui.notify(`Portable behavior is unavailable for Anthropic model ${key}.`, "warning");
+			}
+			if (action !== "status") overrides.set(key, action === "on");
+			ctx.ui.notify(
+				`Portable behavior for ${key}: ${overrides.get(key) === false ? "off" : "on"} (next prompt; this session only).`,
+				"info",
+			);
+		},
+	});
 	pi.on("before_agent_start", (event, ctx) => {
 		if (event.reason !== "prompt") return;
-		const updated = addBehavior(event.systemPrompt, ctx.model);
+		const updated = addBehavior(event.systemPrompt, ctx.model, overrides.get(modelKey(ctx.model) ?? "") !== false);
 		if (updated !== event.systemPrompt) return { systemPrompt: updated };
 	});
 }

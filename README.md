@@ -69,6 +69,17 @@ The cues are newly written, not copies of the [published claude.ai prompt](https
 
 To use: install or copy the extension, restart omp, then select a non-Anthropic model (`/model` or `omp --model openai-codex/gpt-6-sol`). To turn it off globally, add `disabledExtensions: [extension-module:portable-behavior]` to `~/.omp/agent/config.yml` and restart; alternatively start one session with `omp --no-extensions` (which disables *all* auto-discovered extensions). The default install path follows the active OMP profile; named profiles have separate agent directories. Prompt additions are instructions, not an enforcement mechanism, and behavior may vary by model.
 
+To change it **during a running OMP session**, select the model and use the command:
+
+```text
+/model openai-codex/gpt-6-sol
+/portable-behavior off
+/portable-behavior status
+/portable-behavior on
+```
+
+The command targets the currently active `provider/model-id` only. It takes effect on that model's next user prompt; switching away and back retains the choice for this session. Other non-Anthropic models remain on by default. The command cannot enable the supplement for Anthropic or Claude served through another provider. Run `/portable-behavior` with no argument for status. Session overrides reset in a new OMP session; editing an extension's code still requires restarting OMP.
+
 ## HummingRelay balance
 
 [HummingRelay](https://hmbrd.dev) is OpenAI-compatible (Chat Completions only) and prepaid in USD. Its API has no balance endpoint, so `extensions/hummingrelay-usage.ts` signs into the web console with the same `hr_live_` key (`POST https://hmbrd.dev/api/dashboard/login {"key": …}` → `hr_console` cookie) and reads the balance, the paid/bonus split, 30-day spend and runway from the server-rendered `/dashboard` overview.
