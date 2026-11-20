@@ -67,6 +67,17 @@ export function addBehavior(
 
 export default function portableBehavior(pi: ExtensionAPI): void {
 	const overrides = new Map<string, { enabled: boolean; profile: BehaviorProfile }>();
+	let displayedStatus: string | undefined | null = null;
+	function refreshStatus(ctx: ExtensionContext): void {
+		if (ctx.mode !== "tui") return;
+		const model = ctx.models.current();
+		const state = overrides.get(modelKey(model) ?? "");
+		const status = appliesTo(model) && state?.enabled !== false ? `behavior: ${state?.profile ?? "default"}` : undefined;
+		if (status === displayedStatus) return;
+		ctx.ui.setStatus("portable-behavior", status);
+		displayedStatus = status;
+	}
+
 	pi.setLabel("Portable behavior cues");
 	async function openMenu(ctx: ExtensionContext): Promise<void> {
 		const key = modelKey(ctx.model);
@@ -95,6 +106,7 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 		} else {
 			return;
 		}
+		refreshStatus(ctx);
 		const state = overrides.get(key)!;
 		ctx.ui.notify(`Portable behavior for ${key}: ${state.enabled ? "on" : "off"}, profile ${state.profile} (next prompt).`, "info");
 	}
@@ -118,6 +130,7 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 			} else if (words.length !== 1 || action !== "status") {
 				return ctx.ui.notify("Usage: /portable-behavior on | off | status | profile default|opus-5|fable-5", "warning");
 			}
+			refreshStatus(ctx);
 			const state = overrides.get(key) ?? previous;
 			ctx.ui.notify(
 				`Portable behavior for ${key}: ${state.enabled ? "on" : "off"}, profile ${state.profile} (next prompt; this session only).`,
@@ -130,8 +143,14 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 		await openMenu(ctx);
 		return { handled: true };
 	});
+	pi.on("session_start", (_event, ctx) => {
+		displayedStatus = null;
+		refreshStatus(ctx);
+		if (ctx.mode === "tui") ctx.setInterval(() => refreshStatus(ctx), 1000);
+	});
 	pi.on("before_agent_start", (event, ctx) => {
 		if (event.reason !== "prompt") return;
+		refreshStatus(ctx);
 		const state = overrides.get(modelKey(ctx.model) ?? "");
 		const updated = addBehavior(event.systemPrompt, ctx.model, state?.enabled, state?.profile);
 		if (updated !== event.systemPrompt) return { systemPrompt: updated };
