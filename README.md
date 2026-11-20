@@ -69,21 +69,18 @@ The cues are independently written, not copies of the published [Opus 5](https:/
 
 To use: install or copy the extension, restart omp, then select a non-Anthropic model (`/model` or `omp --model openai-codex/gpt-6-sol`). To turn it off globally, add `disabledExtensions: [extension-module:portable-behavior]` to `~/.omp/agent/config.yml` and restart; alternatively start one session with `omp --no-extensions` (which disables *all* auto-discovered extensions). The default install path follows the active OMP profile; named profiles have separate agent directories. Prompt additions are instructions, not an enforcement mechanism, and behavior may vary by model.
 
-To change it **during a running OMP session**, select the model and use the command:
+To choose during a running **interactive** OMP session, select a non-Anthropic model, then open the picker:
 
 ```text
 /model openai-codex/gpt-6-sol
-/portable-behavior profile opus-5
-/portable-behavior profile fable-5
-/portable-behavior profile default
-/portable-behavior status
-/portable-behavior off
-/portable-behavior on
+/portable-behavior
 ```
+
+Typing exactly `portable-behavior` **without** `/` in the interactive composer also opens the same picker instead of sending those words to the model. The menu shows the current model and selection. Pick `default`, `opus-5`, or `fable-5` to enable that profile, or pick `off` to disable it; when disabled, the menu offers `on` to restore the previously selected profile. Dismiss the menu to leave the state unchanged. The bare-word shortcut does not intercept messages with images or run in print/RPC mode.
 
 `default` is the original generic supplement. `opus-5` favors plain, short sentences and useful lists; `fable-5` favors warm prose and minimal formatting unless clarity or local rules require structure. These are **presentation profiles inspired by the published chat prompts**, not the models themselves: they cannot add model capabilities or copy Anthropic's safeguards, identity, product features, or training cutoff.
 
-The command targets the currently active `provider/model-id` only. Profile and on/off choices take effect on that model's next user prompt; switching away and back retains both choices for this session. Other non-Anthropic models remain on with the `default` profile. An `off` model retains its chosen profile until turned `on` again. The command cannot enable the supplement for Anthropic or Claude served through another provider. Run `/portable-behavior` with no argument for status. Session overrides reset in a new OMP session; editing an extension's code still requires restarting OMP.
+The picker and explicit commands target the active `provider/model-id` only. Profile and on/off choices take effect on that model's next user prompt; switching away and back retains both choices for this session. Other non-Anthropic models remain on with the `default` profile. The modifier cannot be enabled for Anthropic or Claude served through another provider. Explicit commands remain available: `/portable-behavior status`, `/portable-behavior profile opus-5`, `/portable-behavior profile fable-5`, `/portable-behavior profile default`, `/portable-behavior off`, and `/portable-behavior on`. Session overrides reset in a new OMP session; updating the extension's code requires restarting OMP once.
 
 ## HummingRelay balance
 

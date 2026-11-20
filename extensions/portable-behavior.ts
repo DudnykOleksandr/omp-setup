@@ -7,7 +7,7 @@
  * Do not copy their model identity, cutoff, product/tool claims, or full prompt.
  * OMP discovers this user-level extension in every default-profile session.
  */
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 
 const MARKER = "<portable-behavior-cues>";
 
@@ -68,9 +68,41 @@ export function addBehavior(
 export default function portableBehavior(pi: ExtensionAPI): void {
 	const overrides = new Map<string, { enabled: boolean; profile: BehaviorProfile }>();
 	pi.setLabel("Portable behavior cues");
+	async function openMenu(ctx: ExtensionContext): Promise<void> {
+		const key = modelKey(ctx.model);
+		if (!key) return ctx.ui.notify("No active model; select one with /model.", "warning");
+		if (!appliesTo(ctx.model)) {
+			return ctx.ui.notify(`Portable behavior is unavailable for Anthropic model ${key}.`, "warning");
+		}
+		const previous = overrides.get(key) ?? { enabled: true, profile: "default" as BehaviorProfile };
+		if (!ctx.hasUI) {
+			return ctx.ui.notify(`Portable behavior for ${key}: ${previous.enabled ? "on" : "off"}, profile ${previous.profile}.`, "info");
+		}
+		const selected = await ctx.ui.select(
+			`Portable behavior · ${key} · ${previous.enabled ? previous.profile : `off (${previous.profile})`}`,
+			[
+				{ label: "default", description: "Generic behavior cues" },
+				{ label: "opus-5", description: "Plain, direct answers; useful lists" },
+				{ label: "fable-5", description: "Warm prose; minimal formatting" },
+				{ label: previous.enabled ? "off" : "on", description: previous.enabled ? "Disable for this model" : "Restore selected profile" },
+			],
+		);
+		if (selected === undefined) return;
+		if (selected === "on" || selected === "off") {
+			overrides.set(key, { ...previous, enabled: selected === "on" });
+		} else if (Object.hasOwn(PROFILE_BLOCKS, selected)) {
+			overrides.set(key, { enabled: true, profile: selected as BehaviorProfile });
+		} else {
+			return;
+		}
+		const state = overrides.get(key)!;
+		ctx.ui.notify(`Portable behavior for ${key}: ${state.enabled ? "on" : "off"}, profile ${state.profile} (next prompt).`, "info");
+	}
+
 	pi.registerCommand("portable-behavior", {
-		description: "Set behavior for the active model: on | off | status | profile default|opus-5|fable-5",
-		handler: (args, ctx) => {
+		description: "Pick a behavior for the active model (or use on | off | status | profile <name>)",
+		handler: async (args, ctx) => {
+			if (!args.trim()) return openMenu(ctx);
 			const key = modelKey(ctx.model);
 			if (!key) return ctx.ui.notify("No active model; select one with /model.", "warning");
 			if (!appliesTo(ctx.model)) {
@@ -92,6 +124,11 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 				"info",
 			);
 		},
+	});
+	pi.on("input", async (event, ctx) => {
+		if (event.source !== "interactive" || event.text.trim() !== "portable-behavior" || event.images?.length) return;
+		await openMenu(ctx);
+		return { handled: true };
 	});
 	pi.on("before_agent_start", (event, ctx) => {
 		if (event.reason !== "prompt") return;
