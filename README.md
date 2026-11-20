@@ -65,7 +65,7 @@ Disable with `disabledExtensions: [extension-module:model-transit]`.
 
 Automatically adds a short behavioral supplement on the next user prompt for a non-Anthropic model (GPT, Gemini, local Ollama, etc.). It excludes the `anthropic` provider and Claude/Fable/Mythos models routed through other providers such as OpenRouter. Switching models with `/model` changes the selection on the next prompt; no skill invocation or special keyword is required. The extension leaves OMP's normal system prompt and project rules intact, and never changes a model's identity, tool list, knowledge cutoff, or safety rules.
 
-The cues are newly written, not copies of the [published claude.ai prompt](https://platform.claude.com/docs/en/release-notes/system-prompts/claude-fable-5-2); those prompts do not apply to Claude API or OMP. They cover honest uncertainty, checking sources and actions, concise and respectful responses, contextual clarification, balanced arguments, untrusted-source handling, and cautious support for distress.
+The cues are independently written, not copies of the published [Opus 5](https://platform.claude.com/docs/en/release-notes/system-prompts/claude-opus-5) or [Fable 5](https://platform.claude.com/docs/en/release-notes/system-prompts/claude-fable-5) claude.ai prompts; those prompts do not apply to Claude API or OMP. All profiles share cues for honest uncertainty, checking sources and actions, respectful responses, contextual clarification, balanced arguments, untrusted-source handling, and cautious support for distress.
 
 To use: install or copy the extension, restart omp, then select a non-Anthropic model (`/model` or `omp --model openai-codex/gpt-6-sol`). To turn it off globally, add `disabledExtensions: [extension-module:portable-behavior]` to `~/.omp/agent/config.yml` and restart; alternatively start one session with `omp --no-extensions` (which disables *all* auto-discovered extensions). The default install path follows the active OMP profile; named profiles have separate agent directories. Prompt additions are instructions, not an enforcement mechanism, and behavior may vary by model.
 
@@ -73,12 +73,17 @@ To change it **during a running OMP session**, select the model and use the comm
 
 ```text
 /model openai-codex/gpt-6-sol
-/portable-behavior off
+/portable-behavior profile opus-5
+/portable-behavior profile fable-5
+/portable-behavior profile default
 /portable-behavior status
+/portable-behavior off
 /portable-behavior on
 ```
 
-The command targets the currently active `provider/model-id` only. It takes effect on that model's next user prompt; switching away and back retains the choice for this session. Other non-Anthropic models remain on by default. The command cannot enable the supplement for Anthropic or Claude served through another provider. Run `/portable-behavior` with no argument for status. Session overrides reset in a new OMP session; editing an extension's code still requires restarting OMP.
+`default` is the original generic supplement. `opus-5` favors plain, short sentences and useful lists; `fable-5` favors warm prose and minimal formatting unless clarity or local rules require structure. These are **presentation profiles inspired by the published chat prompts**, not the models themselves: they cannot add model capabilities or copy Anthropic's safeguards, identity, product features, or training cutoff.
+
+The command targets the currently active `provider/model-id` only. Profile and on/off choices take effect on that model's next user prompt; switching away and back retains both choices for this session. Other non-Anthropic models remain on with the `default` profile. An `off` model retains its chosen profile until turned `on` again. The command cannot enable the supplement for Anthropic or Claude served through another provider. Run `/portable-behavior` with no argument for status. Session overrides reset in a new OMP session; editing an extension's code still requires restarting OMP.
 
 ## HummingRelay balance
 

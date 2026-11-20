@@ -1,7 +1,8 @@
 /**
  * Portable, independently worded behavior cues inspired by Anthropic's published
  * claude.ai system prompts (not Claude API or Claude Code prompts):
- * https://platform.claude.com/docs/en/release-notes/system-prompts/claude-fable-5-2
+ * https://platform.claude.com/docs/en/release-notes/system-prompts/claude-opus-5
+ * https://platform.claude.com/docs/en/release-notes/system-prompts/claude-fable-5
  * https://github.com/KalarisLabs/claude-systems-prompts
  * Do not copy their model identity, cutoff, product/tool claims, or full prompt.
  * OMP discovers this user-level extension in every default-profile session.
@@ -24,6 +25,22 @@ These are supplementary behavior cues, not a replacement for OMP, project instru
 - When discussing distress, don't speculate about a person's diagnosis or motives. Respond to what they actually said, avoid endorsing self-destructive behavior, and prefer appropriately verified support resources.
 </portable-behavior-cues>`;
 
+type BehaviorProfile = "default" | "opus-5" | "fable-5";
+
+const CLOSING = "</portable-behavior-cues>";
+const PROFILE_BLOCKS: Record<BehaviorProfile, string> = {
+	default: CUES,
+	"opus-5": CUES.replace(
+		CLOSING,
+		`\nOpus 5-inspired presentation: Use plain, short, direct sentences. Skip ornate contrasts, verbal flourishes, and stock caveats. Give the useful answer and its basis promptly; use lists when they clarify a multipart answer.\n${CLOSING}`,
+	),
+	"fable-5": CUES.replace(
+		CLOSING,
+		`\nFable 5-inspired presentation: Keep a natural, warm conversational tone. Prefer prose in ordinary conversation and minimize headings and bullets unless requested or necessary for clarity. In longer explanations, use only the structure the user or project needs; don't impose a blanket no-lists rule.\n${CLOSING}`,
+	),
+};
+const KNOWN_BLOCKS = new Set(Object.values(PROFILE_BLOCKS));
+
 export function appliesTo(model: { provider?: string; id?: string } | undefined): boolean {
 	if (!model?.provider || !model.id) return false;
 	const provider = model.provider.toLowerCase();
@@ -39,39 +56,47 @@ export function addBehavior(
 	systemPrompt: string[],
 	model: { provider?: string; id?: string } | undefined,
 	enabled = true,
+	profile: BehaviorProfile = "default",
 ): string[] {
-	const index = systemPrompt.indexOf(CUES);
-	if (!enabled || !appliesTo(model)) {
-		return index < 0 ? systemPrompt : systemPrompt.filter(block => block !== CUES);
-	}
-	return index < 0 ? [...systemPrompt, CUES] : systemPrompt;
+	const next = enabled && appliesTo(model) ? PROFILE_BLOCKS[profile] : undefined;
+	const current = systemPrompt.find(block => KNOWN_BLOCKS.has(block));
+	if (current === next) return systemPrompt;
+	const withoutOld = current ? systemPrompt.filter(block => !KNOWN_BLOCKS.has(block)) : systemPrompt;
+	return next ? [...withoutOld, next] : withoutOld;
 }
 
 export default function portableBehavior(pi: ExtensionAPI): void {
-	const overrides = new Map<string, boolean>();
+	const overrides = new Map<string, { enabled: boolean; profile: BehaviorProfile }>();
 	pi.setLabel("Portable behavior cues");
 	pi.registerCommand("portable-behavior", {
-		description: "Toggle portable behavior for the active model: on | off | status",
+		description: "Set behavior for the active model: on | off | status | profile default|opus-5|fable-5",
 		handler: (args, ctx) => {
 			const key = modelKey(ctx.model);
 			if (!key) return ctx.ui.notify("No active model; select one with /model.", "warning");
-			const action = args.trim().toLowerCase() || "status";
-			if (!["on", "off", "status"].includes(action)) {
-				return ctx.ui.notify("Usage: /portable-behavior on | off | status", "warning");
-			}
 			if (!appliesTo(ctx.model)) {
 				return ctx.ui.notify(`Portable behavior is unavailable for Anthropic model ${key}.`, "warning");
 			}
-			if (action !== "status") overrides.set(key, action === "on");
+			const words = args.trim().toLowerCase().split(/\s+/);
+			const action = words[0] || "status";
+			const previous = overrides.get(key) ?? { enabled: true, profile: "default" as BehaviorProfile };
+			if (words.length === 1 && (action === "on" || action === "off")) {
+				overrides.set(key, { ...previous, enabled: action === "on" });
+			} else if (words.length === 2 && action === "profile" && Object.hasOwn(PROFILE_BLOCKS, words[1])) {
+				overrides.set(key, { ...previous, profile: words[1] as BehaviorProfile });
+			} else if (words.length !== 1 || action !== "status") {
+				return ctx.ui.notify("Usage: /portable-behavior on | off | status | profile default|opus-5|fable-5", "warning");
+			}
+			const state = overrides.get(key) ?? previous;
 			ctx.ui.notify(
-				`Portable behavior for ${key}: ${overrides.get(key) === false ? "off" : "on"} (next prompt; this session only).`,
+				`Portable behavior for ${key}: ${state.enabled ? "on" : "off"}, profile ${state.profile} (next prompt; this session only).`,
 				"info",
 			);
 		},
 	});
 	pi.on("before_agent_start", (event, ctx) => {
 		if (event.reason !== "prompt") return;
-		const updated = addBehavior(event.systemPrompt, ctx.model, overrides.get(modelKey(ctx.model) ?? "") !== false);
+		const state = overrides.get(modelKey(ctx.model) ?? "");
+		const updated = addBehavior(event.systemPrompt, ctx.model, state?.enabled, state?.profile);
 		if (updated !== event.systemPrompt) return { systemPrompt: updated };
 	});
 }
