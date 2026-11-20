@@ -55,7 +55,7 @@ function modelKey(model: { provider?: string; id?: string } | undefined): string
 export function addBehavior(
 	systemPrompt: string[],
 	model: { provider?: string; id?: string } | undefined,
-	enabled = true,
+	enabled = false,
 	profile: BehaviorProfile = "default",
 ): string[] {
 	const next = enabled && appliesTo(model) ? PROFILE_BLOCKS[profile] : undefined;
@@ -72,7 +72,7 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 		if (ctx.mode !== "tui") return;
 		const model = ctx.models.current();
 		const state = overrides.get(modelKey(model) ?? "");
-		const status = appliesTo(model) && state?.enabled !== false ? `behavior: ${state?.profile ?? "default"}` : undefined;
+		const status = appliesTo(model) && state?.enabled === true ? `behavior: ${state.profile}` : undefined;
 		if (status === displayedStatus) return;
 		ctx.ui.setStatus("portable-behavior", status);
 		displayedStatus = status;
@@ -85,7 +85,7 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 		if (!appliesTo(ctx.model)) {
 			return ctx.ui.notify(`Portable behavior is unavailable for Anthropic model ${key}.`, "warning");
 		}
-		const previous = overrides.get(key) ?? { enabled: true, profile: "default" as BehaviorProfile };
+		const previous = overrides.get(key) ?? { enabled: false, profile: "default" as BehaviorProfile };
 		if (!ctx.hasUI) {
 			return ctx.ui.notify(`Portable behavior for ${key}: ${previous.enabled ? "on" : "off"}, profile ${previous.profile}.`, "info");
 		}
@@ -122,11 +122,11 @@ export default function portableBehavior(pi: ExtensionAPI): void {
 			}
 			const words = args.trim().toLowerCase().split(/\s+/);
 			const action = words[0] || "status";
-			const previous = overrides.get(key) ?? { enabled: true, profile: "default" as BehaviorProfile };
+			const previous = overrides.get(key) ?? { enabled: false, profile: "default" as BehaviorProfile };
 			if (words.length === 1 && (action === "on" || action === "off")) {
 				overrides.set(key, { ...previous, enabled: action === "on" });
 			} else if (words.length === 2 && action === "profile" && Object.hasOwn(PROFILE_BLOCKS, words[1])) {
-				overrides.set(key, { ...previous, profile: words[1] as BehaviorProfile });
+				overrides.set(key, { enabled: true, profile: words[1] as BehaviorProfile });
 			} else if (words.length !== 1 || action !== "status") {
 				return ctx.ui.notify("Usage: /portable-behavior on | off | status | profile default|opus-5|fable-5", "warning");
 			}
