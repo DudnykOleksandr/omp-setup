@@ -1,8 +1,8 @@
 # omp-setup
 
-Portable backup of my [omp](https://github.com/can1357/oh-my-pi) customizations: context-maintenance settings, model-switch and non-Anthropic behavior extensions, the Ollama Cloud quota skill, and the HummingRelay provider with its balance display.
+Portable backup of my [omp](https://github.com/can1357/oh-my-pi) customizations: context-maintenance settings, model-switch and non-Anthropic behavior extensions, the Ollama Cloud quota skill, the HummingRelay provider with its balance display, and voice dictation through the ChatGPT/Codex subscription.
 
-Nothing here contains credentials. The Ollama skill reads `OLLAMA_API_KEY` / `OLLAMA_API_KEY_FILE` from the environment; HummingRelay reads `HMBRD_API_KEY`.
+Nothing here contains credentials. The Ollama skill reads `OLLAMA_API_KEY` / `OLLAMA_API_KEY_FILE` from the environment; HummingRelay reads `HMBRD_API_KEY`; Codex dictation uses omp's own `openai-codex` login.
 
 ## Layout
 
@@ -14,6 +14,7 @@ Nothing here contains credentials. The Ollama skill reads `OLLAMA_API_KEY` / `OL
 | `extensions/ollama-cloud-usage.ts` | `~/.omp/agent/extensions/` | Ollama Cloud balance/quota provider |
 | `extensions/hummingrelay-usage.ts` | `~/.omp/agent/extensions/` | HummingRelay prepaid balance for `/usage`, `omp usage` and the footer status row |
 | `extensions/portable-behavior.ts` | `~/.omp/agent/extensions/` | model-scoped, independently worded behavior cues for non-Anthropic models |
+| `extensions/codex-voice.ts` | `~/.omp/agent/extensions/` | speech-to-text through the ChatGPT/Codex subscription (provider `codex-voice/transcribe`) |
 | `skills/ollama-cloud-usage/SKILL.md` | `~/.omp/agent/skills/ollama-cloud-usage/` | skill: how to query Ollama Cloud quota without leaking the key |
 | `docs/compaction-and-model-switching.md` | — | why these settings exist, with measurements |
 
@@ -83,6 +84,35 @@ The TUI status bar is blank for this extension initially. It shows `behavior: de
 `default` is the original generic supplement. `opus-5` favors plain, short sentences and useful lists; `fable-5` favors warm prose and minimal formatting unless clarity or local rules require structure. These are **presentation profiles inspired by the published chat prompts**, not the models themselves: they cannot add model capabilities or copy Anthropic's safeguards, identity, product features, or training cutoff.
 
 The picker and explicit commands target the active `provider/model-id` only. Selecting a profile (including with `/portable-behavior profile …`) enables it for that model on its next user prompt. Switching away and back retains its choice for this session; other non-Anthropic models stay off until enabled separately. The modifier cannot be enabled for Anthropic or Claude served through another provider. Explicit commands remain available: `/portable-behavior status`, `/portable-behavior profile opus-5`, `/portable-behavior profile fable-5`, `/portable-behavior profile default`, `/portable-behavior off`, and `/portable-behavior on`. Session overrides reset in a new OMP session; updating the extension's code requires restarting OMP once.
+
+## Codex dictation
+
+omp's cloud speech-to-text only speaks OpenAI's `POST {baseUrl}/audio/transcriptions`. `extensions/codex-voice.ts` runs a loopback shim on `127.0.0.1` (random port, per-process bearer secret) and registers it as provider `codex-voice` with model `transcribe`. The shim forwards each recording to `https://chatgpt.com/backend-api/transcribe`, the private route Codex Desktop dictation uses, with the access token of omp's `openai-codex` login (`/login openai-codex`). omp owns token refresh; `~/.codex/auth.json` is never read or written.
+
+Setup after installing the extension, already in `config/config.yml`:
+
+```yaml
+modelRoles:
+  dictation: codex-voice/transcribe
+retry:
+  fallbackChains:
+    dictation:
+      - local/whisper-large-v3-turbo   # used when the Codex route fails
+stt:
+  enabled: true
+  language: uk
+```
+
+Restart omp, then dictate as usual (hold `Space`).
+
+Things to know:
+
+- The route is undocumented and may change without notice; the fallback chain then switches to local Whisper.
+- The backend chooses the decoder from the file extension: an upload named without one answers `500 Error in ASR API`, so the shim adds an extension from the MIME type when it is missing (omp's dictation already sends `dictation.wav`; the runner's fallback name is `audio`). It validates `language` as an ISO-639-1 code but does not act on it; the language is auto-detected.
+- OpenAI keeps every uploaded recording for 30 days (`asset_ttl: "30d"` in the response).
+- Measured: an 11.8 s Ukrainian clip transcribed in about 1 s, with correct punctuation and `middleware` kept in Latin script.
+
+`stt.cloudLive: true` sends each phrase when you pause, so text appears while you are still speaking. It needs an omp build with [can1357/oh-my-pi#20359](https://github.com/can1357/oh-my-pi/pull/20359); older omp ignores the key and sends the whole recording at the end. Phrases are transcribed without each other's context, so a short phrase can occasionally be detected as a neighbouring language (seen once: Belarusian for Ukrainian).
 
 ## HummingRelay balance
 

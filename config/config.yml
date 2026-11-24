@@ -3,7 +3,7 @@ setupVersion: 2
 modelRoles:
   default: anthropic/claude-opus-5:high
   speech: local/kokoro
-  dictation: local/parakeet-tdt-0.6b-v3
+  dictation: codex-voice/transcribe
 dev:
   autoqaConsent: denied
 hideThinkingBlock: true
@@ -27,6 +27,8 @@ statusLine:
 stt:
   enabled: true
   language: uk
+  # Phrase-by-phrase cloud dictation; needs omp with can1357/oh-my-pi#20359, older omp ignores the key.
+  cloudLive: true
 compaction:
   methodOrder:
     - snapcompact
@@ -34,3 +36,7 @@ compaction:
     - shake
     - soft
   keepRecentTokens: 40000
+retry:
+  fallbackChains:
+    dictation:
+      - local/whisper-large-v3-turbo
